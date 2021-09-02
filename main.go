@@ -23,7 +23,7 @@ var (
 
 	subscriberClientIdTemplate = "mqtt-stresser-sub-%s-worker%d-%d"
 	publisherClientIdTemplate  = "mqtt-stresser-pub-%s-worker%d-%d"
-	topicNameTemplate          = "internal/mqtt-stresser/%s/worker%d-%d"
+	topicNameTemplate          = "mqtt-stresser"
 
 	errorLogger   = log.New(os.Stderr, "ERROR: ", log.Lmicroseconds|log.Ltime|log.Lshortfile)
 	verboseLogger = log.New(os.Stderr, "DEBUG: ", log.Lmicroseconds|log.Ltime|log.Lshortfile)
@@ -51,7 +51,7 @@ var (
 	argKey                  = flag.String("key", "", "client private key for authentication, if required by server.")
 	argCert                 = flag.String("cert", "", "client certificate for authentication, if required by server.")
 	argPauseBetweenMessages = flag.String("pause-between-messages", "0s", "Adds a pause between sending messages to simulate sensors sending messages infrequently")
-	argTopicBasePath		= flag.String("topic-base-path", "", "topic base path, if empty the default is internal/mqtt-stresser")
+	argTopicBasePath        = flag.String("topic", "", "topic, if empty the default is mqtt-stresser")
 )
 
 type Result struct {
@@ -177,15 +177,15 @@ func main() {
 	}
 
 	if len(*argTopicBasePath) > 0 {
-		topicNameTemplate = strings.Replace(topicNameTemplate, "internal/mqtt-stresser", *argTopicBasePath, 1)
+		topicNameTemplate = *argTopicBasePath
 	}
 
-	payloadGenerator := defaultPayloadGen()
+	payloadGenerator := litmusPayloadGen()
 	if len(*argConstantPayload) > 0 {
 		if strings.HasPrefix(*argConstantPayload, "@") {
 			verboseLogger.Printf("Set constant payload from file %s\n", *argConstantPayload)
 			payloadGenerator = filePayloadGenerator(*argConstantPayload)
-		}else {
+		} else {
 			verboseLogger.Printf("Set constant payload to %s\n", *argConstantPayload)
 			payloadGenerator = constantPayloadGenerator(*argConstantPayload)
 		}

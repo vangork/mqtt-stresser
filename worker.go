@@ -21,6 +21,12 @@ func defaultPayloadGen() PayloadGenerator {
 	}
 }
 
+func litmusPayloadGen() PayloadGenerator {
+	return func(i int) string {
+		return fmt.Sprintf(`{"success": true,"datatype": "int32","timestamp": %d,"registerId": "57D9F461-ADDB-4045-8F9A-417AF8C1BBBF","value": 3118,"deviceID": "6CB16FD4-A869-4FDE-9282-CFF7D7771DE5","tagName": "Process Variable 125", "deviceName": "sim1", "description": "" }`, time.Now().Unix())
+	}
+}
+
 func constantPayloadGenerator(payload string) PayloadGenerator {
 	return func(i int) string {
 		return payload
@@ -111,7 +117,7 @@ func (w *Worker) Run(ctx context.Context) {
 		panic(err)
 	}
 
-	topicName := fmt.Sprintf(topicNameTemplate, hostname, w.WorkerId, t)
+	topicName := topicNameTemplate
 	subscriberClientId := fmt.Sprintf(subscriberClientIdTemplate, hostname, w.WorkerId, t)
 	publisherClientId := fmt.Sprintf(publisherClientIdTemplate, hostname, w.WorkerId, t)
 
