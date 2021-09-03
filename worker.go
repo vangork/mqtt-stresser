@@ -13,22 +13,22 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-type PayloadGenerator func(i int) string
+type PayloadGenerator func(i int, j int64) string
 
 func defaultPayloadGen() PayloadGenerator {
-	return func(i int) string {
-		return fmt.Sprintf("this is msg #%d!", i)
+	return func(i int, j int64) string {
+		return fmt.Sprintf("[%d] this is msg #%d!", j, i)
 	}
 }
 
 func litmusPayloadGen() PayloadGenerator {
-	return func(i int) string {
-		return fmt.Sprintf(`{"success": true,"datatype": "int32","timestamp": %d,"registerId": "57D9F461-ADDB-4045-8F9A-417AF8C1BBBF","value": 3118,"deviceID": "6CB16FD4-A869-4FDE-9282-CFF7D7771DE5","tagName": "tag %d", "deviceName": "sim1", "description": "" }`, time.Now().Unix(), randomSource.Int31())
+	return func(i int, j int64) string {
+		return fmt.Sprintf(`{"success":true,"datatype":"int32","timestamp":%d,"registerId":"57D9F461-ADDB-4045-8F9A-417AF8C1BBBF","value":3118,"deviceID":"6CB16FD4-A869-4FDE-9282-CFF7D7771DE5","tagName":"Process Variable %d","deviceName":"sim1","description": "" }`, j, i)
 	}
 }
 
 func constantPayloadGenerator(payload string) PayloadGenerator {
-	return func(i int) string {
+	return func(i int, j int64) string {
 		return payload
 	}
 }
@@ -40,7 +40,7 @@ func filePayloadGenerator(filepath string) PayloadGenerator {
 		fmt.Printf("error reading payload file: %v\n", err)
 		os.Exit(1)
 	}
-	return func(i int) string {
+	return func(i int, j int64) string {
 		return string(content)
 	}
 }
@@ -53,6 +53,7 @@ type Worker struct {
 	SkipTLSVerification  bool
 	NumberOfMessages     int
 	PayloadGenerator     PayloadGenerator
+	Timestamp            int64
 	Timeout              time.Duration
 	Retained             bool
 	PublisherQoS         byte
@@ -201,7 +202,7 @@ func (w *Worker) Run(ctx context.Context) {
 
 	t0 := time.Now()
 	for i := 0; i < w.NumberOfMessages; i++ {
-		text := w.PayloadGenerator(i)
+		text := w.PayloadGenerator(i, w.Timestamp)
 		token := publisher.Publish(topicName, w.PublisherQoS, w.Retained, text)
 		publishedCount++
 		token.WaitTimeout(w.Timeout)

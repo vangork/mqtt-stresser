@@ -52,6 +52,8 @@ var (
 	argCert                 = flag.String("cert", "", "client certificate for authentication, if required by server.")
 	argPauseBetweenMessages = flag.String("pause-between-messages", "0s", "Adds a pause between sending messages to simulate sensors sending messages infrequently")
 	argTopicBasePath        = flag.String("topic", "", "topic, if empty the default is mqtt-stresser")
+	argStartDatetime        = flag.String("start-datetime", "2000-01-01 00:00:00", "simulated start datetime, e.g. 2006-01-02 03:04:05")
+	argEndDatetime          = flag.String("end-datetime", "2000-01-01 00:00:00", "simulated end datetime, e.g. 2006-01-02 03:04:05")
 )
 
 type Result struct {
@@ -239,14 +241,11 @@ func main() {
 		rampUpSize = 100
 	}
 
-	resultChan = make(chan Result, *argNumClients**argNumMessages)
-
 	globalTimeout, err := time.ParseDuration(*argGlobalTimeout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed parse '--global-timeout': %q is not a valid duration string. See https://golang.org/pkg/time/#ParseDuration for valid duration strings\n", *argGlobalTimeout)
 		os.Exit(1)
 	}
-	testCtx, cancelFunc := context.WithTimeout(context.Background(), globalTimeout)
 
 	pauseBetweenMessages, err := time.ParseDuration(*argPauseBetweenMessages)
 	if err != nil {
@@ -254,91 +253,118 @@ func main() {
 		os.Exit(1)
 	}
 
-	stopStartLoop := false
-	for cid := 0; cid < *argNumClients && !stopStartLoop; cid++ {
-
-		if cid%rampUpSize == 0 && cid > 0 {
-			fmt.Printf("%d worker started - waiting %s\n", cid, rampUpDelay)
-			select {
-			case <-time.NewTimer(rampUpDelay).C:
-			case s := <-signalChan:
-				fmt.Printf("Got signal %s. Cancel test.\n", s.String())
-				cancelFunc()
-				stopStartLoop = true
-			}
-		}
-
-		go (&Worker{
-			WorkerId:             cid,
-			BrokerUrl:            *argBrokerUrl,
-			Username:             username,
-			Password:             password,
-			SkipTLSVerification:  *argSkipTLSVerification,
-			NumberOfMessages:     num,
-			PayloadGenerator:     payloadGenerator,
-			Timeout:              actionTimeout,
-			Retained:             *argRetain,
-			PublisherQoS:         publisherQoS,
-			SubscriberQoS:        subscriberQoS,
-			CA:                   ca,
-			Cert:                 cert,
-			Key:                  key,
-			PauseBetweenMessages: pauseBetweenMessages,
-		}).Run(testCtx)
+	layout := "2006-01-02 03:04:05"
+	startTime, err := time.Parse(layout, *argStartDatetime)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
-	fmt.Printf("%d worker started\n", *argNumClients)
+	startTimestamp := startTime.Unix()
+	endTime, err := time.Parse(layout, *argEndDatetime)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	endTimestamp := endTime.Unix()
 
-	finEvents := 0
+	if startTimestamp > endTimestamp {
+		fmt.Fprintln(os.Stderr, "start-datetime is above end-datetime")
+		os.Exit(1)
+	}
 
-	results := make([]Result, *argNumClients)
+	exitCode := 0
 
-	for finEvents < *argNumClients && !stopWaitLoop {
-		select {
-		case msg := <-resultChan:
-			results[msg.WorkerId] = msg
+	for ts := startTimestamp; ts <= endTimestamp; ts++ {
 
-			if msg.Event == CompletedEvent || msg.Error {
-				finEvents++
-				verboseLogger.Printf("%d/%d events received\n", finEvents, *argNumClients)
+		resultChan = make(chan Result, *argNumClients**argNumMessages)
+		testCtx, cancelFunc := context.WithTimeout(context.Background(), globalTimeout)
+		stopStartLoop := false
+		for cid := 0; cid < *argNumClients && !stopStartLoop; cid++ {
+
+			if cid%rampUpSize == 0 && cid > 0 {
+				fmt.Printf("%d worker started - waiting %s\n", cid, rampUpDelay)
+				select {
+				case <-time.NewTimer(rampUpDelay).C:
+				case s := <-signalChan:
+					fmt.Printf("Got signal %s. Cancel test.\n", s.String())
+					cancelFunc()
+					stopStartLoop = true
+				}
 			}
 
-			if msg.Error {
-				errorLogger.Println(msg)
-			}
+			go (&Worker{
+				WorkerId:             cid,
+				BrokerUrl:            *argBrokerUrl,
+				Username:             username,
+				Password:             password,
+				SkipTLSVerification:  *argSkipTLSVerification,
+				NumberOfMessages:     num,
+				PayloadGenerator:     payloadGenerator,
+				Timestamp:            ts,
+				Timeout:              actionTimeout,
+				Retained:             *argRetain,
+				PublisherQoS:         publisherQoS,
+				SubscriberQoS:        subscriberQoS,
+				CA:                   ca,
+				Cert:                 cert,
+				Key:                  key,
+				PauseBetweenMessages: pauseBetweenMessages,
+			}).Run(testCtx)
+		}
+		fmt.Printf("%d worker started\n", *argNumClients)
 
-			if !*argHideProgress {
-				if msg.Event == ProgressReportEvent {
-					fmt.Print(".")
+		finEvents := 0
+
+		results := make([]Result, *argNumClients)
+
+		for finEvents < *argNumClients && !stopWaitLoop {
+			select {
+			case msg := <-resultChan:
+				results[msg.WorkerId] = msg
+
+				if msg.Event == CompletedEvent || msg.Error {
+					finEvents++
+					verboseLogger.Printf("%d/%d events received\n", finEvents, *argNumClients)
 				}
 
 				if msg.Error {
-					fmt.Print("E")
+					errorLogger.Println(msg)
 				}
-			}
 
-		case <-testCtx.Done():
-			switch testCtx.Err().(type) {
-			case TimeoutError:
-				fmt.Println("Test timeout. Wait 5s to allow disconnection of clients.")
-			default:
-				fmt.Println("Test canceled. Wait 5s to allow disconnection of clients.")
+				if !*argHideProgress {
+					if msg.Event == ProgressReportEvent {
+						fmt.Print(".")
+					}
+
+					if msg.Error {
+						fmt.Print("E")
+					}
+				}
+
+			case <-testCtx.Done():
+				switch testCtx.Err().(type) {
+				case TimeoutError:
+					fmt.Println("Test timeout. Wait 5s to allow disconnection of clients.")
+				default:
+					fmt.Println("Test canceled. Wait 5s to allow disconnection of clients.")
+				}
+				time.Sleep(5 * time.Second)
+				stopWaitLoop = true
+			case s := <-signalChan:
+				fmt.Printf("Got signal %s. Cancel test.\n", s.String())
+				cancelFunc()
+				stopWaitLoop = true
 			}
-			time.Sleep(5 * time.Second)
-			stopWaitLoop = true
-		case s := <-signalChan:
-			fmt.Printf("Got signal %s. Cancel test.\n", s.String())
-			cancelFunc()
-			stopWaitLoop = true
 		}
-	}
 
-	summary, err := buildSummary(*argNumClients, num, results)
-	exitCode := 0
+		summary, err := buildSummary(*argNumClients, num, results)
 
-	if err != nil {
-		exitCode = 1
-	} else {
-		printSummary(summary)
+		if err != nil {
+			exitCode = 1
+		} else {
+			printSummary(summary)
+		}
+
 	}
 
 	if *argProfileMem != "" {
