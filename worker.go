@@ -17,7 +17,7 @@ type PayloadGenerator func(i int, j int64) string
 
 func defaultPayloadGen() PayloadGenerator {
 	return func(i int, j int64) string {
-		return fmt.Sprintf("[%d] this is msg #%d!", j, i)
+		return fmt.Sprintf("this is msg #%d!", i)
 	}
 }
 
