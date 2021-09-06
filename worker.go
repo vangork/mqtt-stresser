@@ -62,6 +62,7 @@ type Worker struct {
 	Cert                 []byte
 	Key                  []byte
 	PauseBetweenMessages time.Duration
+	ClientId             int32
 }
 
 func setSkipTLS(o *mqtt.ClientOptions) {
@@ -111,7 +112,6 @@ func (w *Worker) Run(ctx context.Context) {
 
 	queue := make(chan [2]string)
 	cid := w.WorkerId
-	t := randomSource.Int31()
 
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -119,8 +119,8 @@ func (w *Worker) Run(ctx context.Context) {
 	}
 
 	topicName := topicNameTemplate
-	subscriberClientId := fmt.Sprintf(subscriberClientIdTemplate, hostname, w.WorkerId, t)
-	publisherClientId := fmt.Sprintf(publisherClientIdTemplate, hostname, w.WorkerId, t)
+	subscriberClientId := fmt.Sprintf(subscriberClientIdTemplate, hostname, w.WorkerId, w.ClientId)
+	publisherClientId := fmt.Sprintf(publisherClientIdTemplate, hostname, w.WorkerId, w.ClientId)
 
 	verboseLogger.Printf("[%d] topic=%s subscriberClientId=%s publisherClientId=%s\n", cid, topicName, subscriberClientId, publisherClientId)
 

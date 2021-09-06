@@ -277,6 +277,7 @@ func main() {
 	}
 
 	exitCode := 0
+	clientId := randomSource.Int31()
 
 	for ts := startTimestamp; ts <= endTimestamp; ts++ {
 		resultChan = make(chan Result, *argNumClients**argNumMessages)
@@ -312,6 +313,7 @@ func main() {
 				Cert:                 cert,
 				Key:                  key,
 				PauseBetweenMessages: pauseBetweenMessages,
+				ClientId:			  clientId,
 			}).Run(testCtx)
 		}
 		fmt.Printf("%d worker started\n", *argNumClients)
