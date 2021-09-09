@@ -55,6 +55,7 @@ var (
 	argTopicBasePath        = flag.String("topic", "", "topic, if empty the default is mqtt-stresser")
 	argStartDatetime        = flag.String("start-datetime", "2000-01-01 00:00:00", "simulated start datetime, e.g. 2006-01-02 03:04:05")
 	argEndDatetime          = flag.String("end-datetime", "2000-01-01 00:00:00", "simulated end datetime, e.g. 2006-01-02 03:04:05")
+	argDisableSub           = flag.Bool("disable-sub", false, "disable subscribe checks")
 )
 
 type Result struct {
@@ -311,6 +312,7 @@ func main() {
 				cert,
 				key,
 				pauseBetweenMessages,
+				*argDisableSub,
 				testCtx)
 		}
 
@@ -367,7 +369,10 @@ func main() {
 		} else {
 			printSummary(summary)
 		}
+	}
 
+	for cid := 0; cid < *argNumClients; cid++ {
+		workers[cid].Close()
 	}
 
 	if *argProfileMem != "" {
