@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -63,6 +64,10 @@ type Worker struct {
 	Key                  []byte
 	PauseBetweenMessages time.Duration
 	ClientId             int32
+	Initialized          bool
+	Queue                chan [2]string
+	Subscriber           mqtt.Client
+	Publisher            mqtt.Client
 }
 
 func setSkipTLS(o *mqtt.ClientOptions) {
@@ -107,29 +112,47 @@ func NewTLSConfig(ca, certificate, privkey []byte) (*tls.Config, error) {
 	}, nil
 }
 
-func (w *Worker) Run(ctx context.Context) {
+func (w *Worker) Init(cid int, brokerUrl string, username string, password string,
+	skipTLSVerification bool, num int, payloadGenerator PayloadGenerator, ts int64,
+	actionTimeout time.Duration, retained bool, publisherQoS byte, subscriberQoS byte,
+	ca []byte, cert []byte, key []byte, pauseBetweenMessages time.Duration) error {
+
 	verboseLogger.Printf("[%d] initializing\n", w.WorkerId)
 
-	queue := make(chan [2]string)
-	cid := w.WorkerId
+	w.WorkerId = cid
+	w.BrokerUrl = brokerUrl
+	w.Username = username
+	w.Password = password
+	w.SkipTLSVerification = skipTLSVerification
+	w.NumberOfMessages = num
+	w.PayloadGenerator = payloadGenerator
+	w.Timestamp = ts
+	w.Timeout = actionTimeout
+	w.Retained = retained
+	w.PublisherQoS = publisherQoS
+	w.SubscriberQoS = subscriberQoS
+	w.CA = ca
+	w.Cert = cert
+	w.Key = key
+	w.PauseBetweenMessages = pauseBetweenMessages
 
+	w.Queue = make(chan [2]string)
 	hostname, err := os.Hostname()
 	if err != nil {
 		panic(err)
 	}
-
+	clientId := randomSource.Int31()
 	topicName := topicNameTemplate
-	subscriberClientId := fmt.Sprintf(subscriberClientIdTemplate, hostname, w.WorkerId, w.ClientId)
-	publisherClientId := fmt.Sprintf(publisherClientIdTemplate, hostname, w.WorkerId, w.ClientId)
+	subscriberClientId := fmt.Sprintf(subscriberClientIdTemplate, hostname, w.WorkerId, clientId)
+	publisherClientId := fmt.Sprintf(publisherClientIdTemplate, hostname, w.WorkerId, clientId)
 
-	verboseLogger.Printf("[%d] topic=%s subscriberClientId=%s publisherClientId=%s\n", cid, topicName, subscriberClientId, publisherClientId)
+	verboseLogger.Printf("[%d] topic=%s subscriberClientId=%s publisherClientId=%s\n", w.WorkerId, topicName, subscriberClientId, publisherClientId)
 
 	publisherOptions := mqtt.NewClientOptions().SetClientID(publisherClientId).SetUsername(w.Username).SetPassword(w.Password).AddBroker(w.BrokerUrl)
-
 	subscriberOptions := mqtt.NewClientOptions().SetClientID(subscriberClientId).SetUsername(w.Username).SetPassword(w.Password).AddBroker(w.BrokerUrl)
 
 	subscriberOptions.SetDefaultPublishHandler(func(client mqtt.Client, msg mqtt.Message) {
-		queue <- [2]string{msg.Topic(), string(msg.Payload())}
+		w.Queue <- [2]string{msg.Topic(), string(msg.Payload())}
 	})
 
 	if len(w.CA) > 0 || len(w.Key) > 0 {
@@ -146,54 +169,76 @@ func (w *Worker) Run(ctx context.Context) {
 		setSkipTLS(subscriberOptions)
 	}
 
-	subscriber := mqtt.NewClient(subscriberOptions)
+	w.Subscriber = mqtt.NewClient(subscriberOptions)
 
 	verboseLogger.Printf("[%d] connecting subscriber\n", w.WorkerId)
-	if token := subscriber.Connect(); token.WaitTimeout(w.Timeout) && token.Error() != nil {
+	if token := w.Subscriber.Connect(); token.WaitTimeout(w.Timeout) && token.Error() != nil {
 		resultChan <- Result{
 			WorkerId:     w.WorkerId,
 			Event:        ConnectFailedEvent,
 			Error:        true,
 			ErrorMessage: token.Error(),
 		}
-
-		return
+		return errors.New("fail to connect subscriber")
 	}
 
-	defer func() {
-		verboseLogger.Printf("[%d] unsubscribe\n", w.WorkerId)
+	// defer func() {
+	// 	verboseLogger.Printf("[%d] unsubscribe\n", w.WorkerId)
 
-		if token := subscriber.Unsubscribe(topicName); token.WaitTimeout(w.Timeout) && token.Error() != nil {
-			fmt.Printf("failed to unsubscribe: %v\n", token.Error())
-		}
+	// 	if token := w.Subscriber.Unsubscribe(topicName); token.WaitTimeout(w.Timeout) && token.Error() != nil {
+	// 		fmt.Printf("failed to unsubscribe: %v\n", token.Error())
+	// 	}
 
-		subscriber.Disconnect(5)
-	}()
+	// 	w.Subscriber.Disconnect(5)
+	// }()
 
 	verboseLogger.Printf("[%d] subscribing to topic\n", w.WorkerId)
-	if token := subscriber.Subscribe(topicName, w.SubscriberQoS, nil); token.WaitTimeout(w.Timeout) && token.Error() != nil {
+	if token := w.Subscriber.Subscribe(topicName, w.SubscriberQoS, nil); token.WaitTimeout(w.Timeout) && token.Error() != nil {
 		resultChan <- Result{
 			WorkerId:     w.WorkerId,
 			Event:        SubscribeFailedEvent,
 			Error:        true,
 			ErrorMessage: token.Error(),
 		}
-
-		return
+		return errors.New("fail to subscribe to topic")
 	}
 
-	publisher := mqtt.NewClient(publisherOptions)
+	w.Publisher = mqtt.NewClient(publisherOptions)
 	verboseLogger.Printf("[%d] connecting publisher\n", w.WorkerId)
-	if token := publisher.Connect(); token.WaitTimeout(w.Timeout) && token.Error() != nil {
+	if token := w.Publisher.Connect(); token.WaitTimeout(w.Timeout) && token.Error() != nil {
 		resultChan <- Result{
 			WorkerId:     w.WorkerId,
 			Event:        ConnectFailedEvent,
 			Error:        true,
 			ErrorMessage: token.Error(),
 		}
-		return
+		return errors.New("fail to connect publisher")
 	}
 
+	w.Initialized = true
+
+	return nil
+}
+
+func (w *Worker) Run(cid int, brokerUrl string, username string, password string,
+	skipTLSVerification bool, num int, payloadGenerator PayloadGenerator, ts int64,
+	actionTimeout time.Duration, retained bool, publisherQoS byte, subscriberQoS byte,
+	ca []byte, cert []byte, key []byte, pauseBetweenMessages time.Duration, ctx context.Context) {
+
+	fmt.Printf("%d worker started\n", cid)
+
+	if !w.Initialized {
+		err := w.Init(cid, brokerUrl, username, password,
+			skipTLSVerification, num, payloadGenerator, ts,
+			actionTimeout, retained, publisherQoS, subscriberQoS,
+			ca, cert, key, pauseBetweenMessages)
+		if err != nil {
+			errorLogger.Printf("[%d] failed to initialize: %s\n", cid, err)
+			return
+		}
+	}
+
+	topicName := topicNameTemplate
 	verboseLogger.Printf("[%d] starting control loop %s\n", w.WorkerId, topicName)
 
 	stopWorker := false
@@ -203,12 +248,12 @@ func (w *Worker) Run(ctx context.Context) {
 	t0 := time.Now()
 	for i := 0; i < w.NumberOfMessages; i++ {
 		text := w.PayloadGenerator(i, w.Timestamp)
-		token := publisher.Publish(topicName, w.PublisherQoS, w.Retained, text)
+		token := w.Publisher.Publish(topicName, w.PublisherQoS, w.Retained, text)
 		publishedCount++
 		token.WaitTimeout(w.Timeout)
 		time.Sleep(w.PauseBetweenMessages)
 	}
-	publisher.Disconnect(5)
+	//w.Publisher.Disconnect(5)
 
 	publishTime := time.Since(t0)
 	verboseLogger.Printf("[%d] all messages published\n", w.WorkerId)
@@ -216,7 +261,7 @@ func (w *Worker) Run(ctx context.Context) {
 	t0 = time.Now()
 	for receivedCount < w.NumberOfMessages && !stopWorker {
 		select {
-		case <-queue:
+		case <-w.Queue:
 			receivedCount++
 
 			verboseLogger.Printf("[%d] %d/%d received\n", w.WorkerId, receivedCount, w.NumberOfMessages)

@@ -276,8 +276,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	exitCode := 0
-	clientId := randomSource.Int31()
+	workers := make([]Worker, *argNumClients)
 
 	for ts := startTimestamp; ts <= endTimestamp; ts++ {
 		resultChan = make(chan Result, *argNumClients**argNumMessages)
@@ -296,27 +295,24 @@ func main() {
 				}
 			}
 
-			go (&Worker{
-				WorkerId:             cid,
-				BrokerUrl:            *argBrokerUrl,
-				Username:             username,
-				Password:             password,
-				SkipTLSVerification:  *argSkipTLSVerification,
-				NumberOfMessages:     num,
-				PayloadGenerator:     payloadGenerator,
-				Timestamp:            ts,
-				Timeout:              actionTimeout,
-				Retained:             *argRetain,
-				PublisherQoS:         publisherQoS,
-				SubscriberQoS:        subscriberQoS,
-				CA:                   ca,
-				Cert:                 cert,
-				Key:                  key,
-				PauseBetweenMessages: pauseBetweenMessages,
-				ClientId:			  clientId,
-			}).Run(testCtx)
+			go workers[cid].Run(cid,
+				*argBrokerUrl,
+				username,
+				password,
+				*argSkipTLSVerification,
+				num,
+				payloadGenerator,
+				ts,
+				actionTimeout,
+				*argRetain,
+				publisherQoS,
+				subscriberQoS,
+				ca,
+				cert,
+				key,
+				pauseBetweenMessages,
+				testCtx)
 		}
-		fmt.Printf("%d worker started\n", *argNumClients)
 
 		finEvents := 0
 
@@ -346,6 +342,7 @@ func main() {
 					}
 				}
 
+			// testCtx.Done() is also consumed in worker. need confirm.
 			case <-testCtx.Done():
 				switch testCtx.Err().(type) {
 				case TimeoutError:
@@ -355,6 +352,7 @@ func main() {
 				}
 				time.Sleep(5 * time.Second)
 				stopWaitLoop = true
+
 			case s := <-signalChan:
 				fmt.Printf("Got signal %s. Cancel test.\n", s.String())
 				cancelFunc()
@@ -365,7 +363,7 @@ func main() {
 		summary, err := buildSummary(*argNumClients, num, results)
 
 		if err != nil {
-			exitCode = 1
+			fmt.Printf("\nFailed to build summary: %s\n", err)
 		} else {
 			printSummary(summary)
 		}
@@ -389,5 +387,5 @@ func main() {
 
 	pprof.StopCPUProfile()
 
-	os.Exit(exitCode)
+	os.Exit(0)
 }
