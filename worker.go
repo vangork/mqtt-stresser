@@ -213,7 +213,7 @@ func (w *Worker) Init(cid int, brokerUrl string, username string, password strin
 	}
 
 	w.SpeedMultiplier = speedMultiplier
-	w.RateLimiter = rate.NewLimiter(rate.Limit(w.SpeedMultiplier*float64(w.NumberOfMessages)), 1)
+	w.RateLimiter = rate.NewLimiter(rate.Limit(w.SpeedMultiplier*float64(w.NumberOfMessages)), 10)
 
 	w.Initialized = true
 
