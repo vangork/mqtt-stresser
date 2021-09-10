@@ -56,6 +56,7 @@ var (
 	argStartDatetime        = flag.String("start-datetime", "2000-01-01 00:00:00", "simulated start datetime, e.g. 2006-01-02 03:04:05")
 	argEndDatetime          = flag.String("end-datetime", "2000-01-01 00:00:00", "simulated end datetime, e.g. 2006-01-02 03:04:05")
 	argDisableSub           = flag.Bool("disable-sub", false, "disable subscribe checks")
+	argSpeedMultiplier      = flag.Float64("speed-multiplier", 0.0, "set the stresser speed multiplier, default no limit")
 )
 
 type Result struct {
@@ -278,9 +279,9 @@ func main() {
 	}
 
 	workers := make([]Worker, *argNumClients)
+	resultChan = make(chan Result, *argNumClients**argNumMessages)
 
 	for ts := startTimestamp; ts <= endTimestamp; ts++ {
-		resultChan = make(chan Result, *argNumClients**argNumMessages)
 		testCtx, cancelFunc := context.WithTimeout(context.Background(), globalTimeout)
 		stopStartLoop := false
 		for cid := 0; cid < *argNumClients && !stopStartLoop; cid++ {
@@ -313,6 +314,7 @@ func main() {
 				key,
 				pauseBetweenMessages,
 				*argDisableSub,
+				*argSpeedMultiplier,
 				testCtx)
 		}
 

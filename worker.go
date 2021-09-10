@@ -12,6 +12,7 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"golang.org/x/time/rate"
 )
 
 type PayloadGenerator func(i int, j int64) string
@@ -68,6 +69,8 @@ type Worker struct {
 	Queue                chan [2]string
 	Subscriber           mqtt.Client
 	Publisher            mqtt.Client
+	RateLimiter          *rate.Limiter
+	SpeedMultiplier      float64
 }
 
 func setSkipTLS(o *mqtt.ClientOptions) {
@@ -115,7 +118,8 @@ func NewTLSConfig(ca, certificate, privkey []byte) (*tls.Config, error) {
 func (w *Worker) Init(cid int, brokerUrl string, username string, password string,
 	skipTLSVerification bool, num int, payloadGenerator PayloadGenerator, ts int64,
 	actionTimeout time.Duration, retained bool, publisherQoS byte, subscriberQoS byte,
-	ca []byte, cert []byte, key []byte, pauseBetweenMessages time.Duration, disableSub bool) error {
+	ca []byte, cert []byte, key []byte, pauseBetweenMessages time.Duration, disableSub bool,
+	speedMultiplier float64) error {
 
 	verboseLogger.Printf("[%d] initializing\n", w.WorkerId)
 
@@ -208,6 +212,9 @@ func (w *Worker) Init(cid int, brokerUrl string, username string, password strin
 		return errors.New("fail to connect publisher")
 	}
 
+	w.SpeedMultiplier = speedMultiplier
+	w.RateLimiter = rate.NewLimiter(rate.Limit(w.SpeedMultiplier*float64(w.NumberOfMessages)), 1)
+
 	w.Initialized = true
 
 	return nil
@@ -232,7 +239,9 @@ func (w *Worker) Close() {
 func (w *Worker) Run(cid int, brokerUrl string, username string, password string,
 	skipTLSVerification bool, num int, payloadGenerator PayloadGenerator, ts int64,
 	actionTimeout time.Duration, retained bool, publisherQoS byte, subscriberQoS byte,
-	ca []byte, cert []byte, key []byte, pauseBetweenMessages time.Duration, disableSub bool, ctx context.Context) {
+	ca []byte, cert []byte, key []byte, pauseBetweenMessages time.Duration, disableSub bool,
+	speedMultiplier float64,
+	ctx context.Context) {
 
 	fmt.Printf("%d worker started\n", cid)
 
@@ -240,7 +249,8 @@ func (w *Worker) Run(cid int, brokerUrl string, username string, password string
 		err := w.Init(cid, brokerUrl, username, password,
 			skipTLSVerification, num, payloadGenerator, ts,
 			actionTimeout, retained, publisherQoS, subscriberQoS,
-			ca, cert, key, pauseBetweenMessages, disableSub)
+			ca, cert, key, pauseBetweenMessages, disableSub,
+			speedMultiplier)
 		if err != nil {
 			fmt.Printf("[%d] failed to initialize: %s\n", cid, err)
 			return
@@ -257,6 +267,9 @@ func (w *Worker) Run(cid int, brokerUrl string, username string, password string
 	t0 := time.Now()
 	for i := 0; i < w.NumberOfMessages; i++ {
 		text := w.PayloadGenerator(i, w.Timestamp)
+		if w.SpeedMultiplier > 1e-6 {
+			w.RateLimiter.Wait(ctx)
+		}
 		token := w.Publisher.Publish(topicName, w.PublisherQoS, w.Retained, text)
 		publishedCount++
 		token.WaitTimeout(w.Timeout)
