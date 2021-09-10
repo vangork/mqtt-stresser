@@ -176,9 +176,9 @@ func (w *Worker) Init(cid int, brokerUrl string, username string, password strin
 
 	w.Subscriber = mqtt.NewClient(subscriberOptions)
 
-	if !disableSub {
+	if !w.DisableSub {
 		verboseLogger.Printf("[%d] connecting subscriber\n", w.WorkerId)
-		if token := w.Subscriber.Connect(); token.WaitTimeout(w.Timeout) && token.Error() != nil {
+		if token := w.Subscriber.Connect(); !token.WaitTimeout(w.Timeout) || token.Error() != nil {
 			resultChan <- Result{
 				WorkerId:     w.WorkerId,
 				Event:        ConnectFailedEvent,
@@ -202,7 +202,7 @@ func (w *Worker) Init(cid int, brokerUrl string, username string, password strin
 
 	w.Publisher = mqtt.NewClient(publisherOptions)
 	verboseLogger.Printf("[%d] connecting publisher\n", w.WorkerId)
-	if token := w.Publisher.Connect(); token.WaitTimeout(w.Timeout) && token.Error() != nil {
+	if token := w.Publisher.Connect(); !token.WaitTimeout(w.Timeout) || token.Error() != nil {
 		resultChan <- Result{
 			WorkerId:     w.WorkerId,
 			Event:        ConnectFailedEvent,
@@ -271,8 +271,9 @@ func (w *Worker) Run(cid int, brokerUrl string, username string, password string
 			w.RateLimiter.Wait(ctx)
 		}
 		token := w.Publisher.Publish(topicName, w.PublisherQoS, w.Retained, text)
-		publishedCount++
-		token.WaitTimeout(w.Timeout)
+		if token.WaitTimeout(w.Timeout) && token.Error() == nil {
+			publishedCount++
+		}
 		time.Sleep(w.PauseBetweenMessages)
 	}
 	publishTime := time.Since(t0)
