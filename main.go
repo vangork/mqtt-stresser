@@ -346,7 +346,6 @@ func main() {
 					}
 				}
 
-			// testCtx.Done() is also consumed in worker. need confirm.
 			case <-testCtx.Done():
 				switch testCtx.Err().(type) {
 				case TimeoutError:
