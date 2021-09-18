@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    release: {{ .Release.Name }}
+spec:
+  selector:
+    matchLabels:
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: mqtt-stresser
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: [ "mqtt-stresser" ]
+        args: 
+        - -broker={{ .Values.broker }}
+        - -topic={{ .Values.topic | quote }}
+        - -num-clients={{ .Values.num_clients }}
+        - -num-messages={{ .Values.num_messages }}
+        - -username={{ .Values.username }}
+        - -password={{ .Values.password }}
+        - -litmus-payload
+        - -speed-multiplier={{ .Values.speed_multiplier }}
+        - -disable-sub={{ .Values.disable_sub }}
+        - -start-datetime={{ .Values.start_datetime }}
+        - -end-datetime={{ .Values.end_datetime }}
+        - -skip-tls-verification={{ .Values.skip_tls }}

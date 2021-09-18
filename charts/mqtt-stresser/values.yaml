@@ -1,0 +1,16 @@
+image:
+  repository: devops-repo.isus.emc.com:8116/nautilus/mqtt-stresser
+  tag: latest
+  pullPolicy: Always
+
+broker: tls://mqtt-broker.luis.svc.cluster.local:8883
+topic: mqtt-stresser
+num_clients: 1
+num_messages: 5000
+username: luis
+password: password
+speed_multiplier: 1.0
+disable_sub: true
+skip_tls: true
+start_datetime: "2021-09-10 00:00:00"
+end_datetime: "2030-09-10 00:00:00"  
