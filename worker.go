@@ -55,7 +55,6 @@ type Worker struct {
 	SkipTLSVerification  bool
 	NumberOfMessages     int
 	PayloadGenerator     PayloadGenerator
-	Timestamp            int64
 	Timeout              time.Duration
 	Retained             bool
 	PublisherQoS         byte
@@ -116,7 +115,7 @@ func NewTLSConfig(ca, certificate, privkey []byte) (*tls.Config, error) {
 }
 
 func (w *Worker) Init(cid int, brokerUrl string, username string, password string,
-	skipTLSVerification bool, num int, payloadGenerator PayloadGenerator, ts int64,
+	skipTLSVerification bool, num int, payloadGenerator PayloadGenerator,
 	actionTimeout time.Duration, retained bool, publisherQoS byte, subscriberQoS byte,
 	ca []byte, cert []byte, key []byte, pauseBetweenMessages time.Duration, disableSub bool,
 	speedMultiplier float64) error {
@@ -130,7 +129,6 @@ func (w *Worker) Init(cid int, brokerUrl string, username string, password strin
 	w.SkipTLSVerification = skipTLSVerification
 	w.NumberOfMessages = num
 	w.PayloadGenerator = payloadGenerator
-	w.Timestamp = ts
 	w.Timeout = actionTimeout
 	w.Retained = retained
 	w.PublisherQoS = publisherQoS
@@ -247,7 +245,7 @@ func (w *Worker) Run(cid int, brokerUrl string, username string, password string
 
 	if !w.Initialized {
 		err := w.Init(cid, brokerUrl, username, password,
-			skipTLSVerification, num, payloadGenerator, ts,
+			skipTLSVerification, num, payloadGenerator,
 			actionTimeout, retained, publisherQoS, subscriberQoS,
 			ca, cert, key, pauseBetweenMessages, disableSub,
 			speedMultiplier)
@@ -266,7 +264,7 @@ func (w *Worker) Run(cid int, brokerUrl string, username string, password string
 
 	t0 := time.Now()
 	for i := 0; i < w.NumberOfMessages; i++ {
-		text := w.PayloadGenerator(i, w.Timestamp)
+		text := w.PayloadGenerator(i, ts)
 		if w.SpeedMultiplier > 1e-6 {
 			w.RateLimiter.Wait(ctx)
 		}
