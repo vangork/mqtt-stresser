@@ -104,6 +104,12 @@ push-container:
 	docker tag $(namespace)/$(appname) $(namespace)/$(appname):$(VERSION)
 	docker push $(namespace)/$(appname):$(VERSION)
 
+DOCKER_REGISTRY ?= devops-repo.isus.emc.com:8116/nautilus/mqtt-stresser
+DOCKER_TAG ?= latest
+docker:
+	docker build -t ${DOCKER_REGISTRY}:${DOCKER_TAG} . 
+	docker push ${DOCKER_REGISTRY}:${DOCKER_TAG}
+
 ##### Vendoring #####
 
 

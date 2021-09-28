@@ -265,13 +265,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	startTimestamp := startTime.Unix()
+	startTimestamp := startTime.UnixMilli()
 	endTime, err := time.Parse(layout, *argEndDatetime)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	endTimestamp := endTime.Unix()
+	endTimestamp := endTime.UnixMilli()
 
 	if startTimestamp > endTimestamp {
 		fmt.Fprintln(os.Stderr, "start-datetime is above end-datetime")
