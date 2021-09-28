@@ -57,6 +57,7 @@ var (
 	argEndDatetime          = flag.String("end-datetime", "2000-01-01 00:00:00", "simulated end datetime, e.g. 2006-01-02 03:04:05")
 	argDisableSub           = flag.Bool("disable-sub", false, "disable subscribe checks")
 	argSpeedMultiplier      = flag.Float64("speed-multiplier", 0.0, "set the stresser speed multiplier, default no limit")
+	argTokenBucket          = flag.Int("token-bucket", 10, "set the token bucket size")
 )
 
 type Result struct {
@@ -315,6 +316,7 @@ func main() {
 				pauseBetweenMessages,
 				*argDisableSub,
 				*argSpeedMultiplier,
+				*argTokenBucket,
 				testCtx)
 		}
 

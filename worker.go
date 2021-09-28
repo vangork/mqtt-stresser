@@ -118,7 +118,7 @@ func (w *Worker) Init(cid int, brokerUrl string, username string, password strin
 	skipTLSVerification bool, num int, payloadGenerator PayloadGenerator,
 	actionTimeout time.Duration, retained bool, publisherQoS byte, subscriberQoS byte,
 	ca []byte, cert []byte, key []byte, pauseBetweenMessages time.Duration, disableSub bool,
-	speedMultiplier float64) error {
+	speedMultiplier float64, tokenBucket int) error {
 
 	verboseLogger.Printf("[%d] initializing\n", w.WorkerId)
 
@@ -211,7 +211,7 @@ func (w *Worker) Init(cid int, brokerUrl string, username string, password strin
 	}
 
 	w.SpeedMultiplier = speedMultiplier
-	w.RateLimiter = rate.NewLimiter(rate.Limit(w.SpeedMultiplier*float64(w.NumberOfMessages)), 10)
+	w.RateLimiter = rate.NewLimiter(rate.Limit(w.SpeedMultiplier*float64(w.NumberOfMessages)), tokenBucket)
 
 	w.Initialized = true
 
@@ -238,7 +238,7 @@ func (w *Worker) Run(cid int, brokerUrl string, username string, password string
 	skipTLSVerification bool, num int, payloadGenerator PayloadGenerator, ts int64,
 	actionTimeout time.Duration, retained bool, publisherQoS byte, subscriberQoS byte,
 	ca []byte, cert []byte, key []byte, pauseBetweenMessages time.Duration, disableSub bool,
-	speedMultiplier float64,
+	speedMultiplier float64, tokenBucket int,
 	ctx context.Context) {
 
 	fmt.Printf("%d worker started\n", cid)
@@ -248,7 +248,7 @@ func (w *Worker) Run(cid int, brokerUrl string, username string, password string
 			skipTLSVerification, num, payloadGenerator,
 			actionTimeout, retained, publisherQoS, subscriberQoS,
 			ca, cert, key, pauseBetweenMessages, disableSub,
-			speedMultiplier)
+			speedMultiplier, tokenBucket)
 		if err != nil {
 			fmt.Printf("[%d] failed to initialize: %s\n", cid, err)
 			return

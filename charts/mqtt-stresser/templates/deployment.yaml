@@ -31,3 +31,4 @@ spec:
         - -start-datetime={{ .Values.start_datetime }}
         - -end-datetime={{ .Values.end_datetime }}
         - -skip-tls-verification={{ .Values.skip_tls }}
+        - -token-bucket={{ .Values.token_bucket }}
