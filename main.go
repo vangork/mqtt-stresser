@@ -282,9 +282,9 @@ func main() {
 	workers := make([]Worker, *argNumClients)
 	resultChan = make(chan Result, *argNumClients**argNumMessages)
 
-	for ts := startTimestamp; ts <= endTimestamp; ts++ {
+	stopStartLoop := false
+	for ts := startTimestamp; ts <= endTimestamp && !stopStartLoop; ts++ {
 		testCtx, cancelFunc := context.WithTimeout(context.Background(), globalTimeout)
-		stopStartLoop := false
 		for cid := 0; cid < *argNumClients && !stopStartLoop; cid++ {
 
 			if cid%rampUpSize == 0 && cid > 0 {
