@@ -9,9 +9,9 @@ num_clients: 1
 num_messages: 5000
 username: luis
 password: password
-speed_multiplier: 5.0
+speed_multiplier: 3.0
 disable_sub: true
 skip_tls: true
-start_datetime: "2021-09-28 00:00:00"
-end_datetime: "2030-09-28 00:00:00"
+start_datetime: "2021-09-30 00:00:00"
+end_datetime: "2030-09-30 00:00:00"
 token_bucket: 20

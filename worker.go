@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -26,7 +25,7 @@ func defaultPayloadGen() PayloadGenerator {
 
 func litmusPayloadGen() PayloadGenerator {
 	return func(i int, j int64) string {
-		return fmt.Sprintf(`{"success":true,"datatype":"int32","timestamp":%d,"registerId":"57D9F461-ADDB-4045-8F9A-417AF8C1BBBF","value":%d,"deviceID":"6CB16FD4-A869-4FDE-9282-CFF7D7771DE5","tagName":"Process Variable %d","deviceName":"sim1","description": "" }`, j, rand.Intn(3000), i)
+		return fmt.Sprintf(`{"success":true,"datatype":"int32","timestamp":%d,"registerId":"57D9F461-ADDB-4045-8F9A-417AF8C1BBBF","value":%d,"deviceID":"6CB16FD4-A869-4FDE-9282-CFF7D7771DE5","tagName":"Process Variable %d","deviceName":"sim1","description": "" }`, j, randomSource.Intn(3000), i)
 	}
 }
 
@@ -122,7 +121,6 @@ func (w *Worker) Init(cid int, brokerUrl string, username string, password strin
 	speedMultiplier float64, tokenBucket int) error {
 
 	verboseLogger.Printf("[%d] initializing\n", w.WorkerId)
-	rand.Seed(time.Now().UnixNano())
 
 	w.WorkerId = cid
 	w.BrokerUrl = brokerUrl
